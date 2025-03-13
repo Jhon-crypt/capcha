@@ -1,0 +1,58 @@
+# Project-specific directories
+screenshots/
+cookies/
+profiles/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.env/
+.venv/
+.python-version
+
+# Browser driver binaries
+drivers/
+*.exe
+chromedriver*
+
+# Logs and databases
+*.log
+*.sqlite3
+*.db
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor and IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/ 
