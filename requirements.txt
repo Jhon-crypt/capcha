@@ -1,2 +1,2 @@
-seleniumbase>=4.15.0
+seleniumbase>=4.19.2
 undetected-chromedriver>=3.5.0 

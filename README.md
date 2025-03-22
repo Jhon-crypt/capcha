@@ -33,6 +33,11 @@ This tool helps you achieve high reCAPTCHA v3 scores (0.8-0.9) by simulating hum
    pip install -r requirements.txt
    ```
 
+3. Create the required directories (automatically created by the script on first run):
+   ```bash
+   mkdir -p screenshots cookies profiles
+   ```
+
 ## Usage
 
 ### Basic Usage
@@ -76,6 +81,37 @@ Options:
 3. Run in headless mode:
    ```bash
    python advanced_score_detector.py --profile high_score_profile --headless
+   ```
+
+### Using Shell Scripts
+
+For convenience, two shell scripts are provided:
+
+1. **run_detector.sh** - Run the detector with various options:
+   ```bash
+   # Make executable (first time only)
+   chmod +x run_detector.sh
+   
+   # Run with default settings
+   ./run_detector.sh
+   
+   # Run with custom options
+   ./run_detector.sh --profile=my_profile --runs=3
+   
+   # Show help
+   ./run_detector.sh --help
+   ```
+
+2. **analyze_scores.sh** - Analyze score history from previous runs:
+   ```bash
+   # Make executable (first time only)
+   chmod +x analyze_scores.sh
+   
+   # Analyze default profile
+   ./analyze_scores.sh
+   
+   # Analyze specific profile
+   ./analyze_scores.sh --profile=my_profile
    ```
 
 ## How It Works
@@ -147,6 +183,18 @@ capcha/
    - Make sure Chrome is installed and accessible
    - Check if any antivirus software is blocking the script
    - Try running without headless mode
+
+4. **Context Manager Error**
+   - If you see an error like `'_GeneratorContextManager' object has no attribute 'execute_script'`
+   - This is related to how SeleniumBase initializes the browser
+   - Make sure you're using the latest version of the script which handles browser initialization correctly
+   - You can update with `pip install -U seleniumbase` to get the latest SeleniumBase version
+   - If you still encounter this error, you might need to update the `init_browser` function to use `Driver` instead of `SB` class
+
+5. **Driver Issue with seleniumbase>=4.19.2**
+   - If using the latest version of seleniumbase causes driver issues
+   - Try using: `pip install seleniumbase==4.18.1` to install a more stable version
+   - You may need to adjust the `init_browser` function accordingly
 
 ## Notes
 

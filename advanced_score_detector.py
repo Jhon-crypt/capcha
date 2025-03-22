@@ -11,6 +11,9 @@ import re
 from datetime import datetime, timedelta
 import hashlib
 import traceback
+import glob
+from seleniumbase import Driver
+from seleniumbase.common.exceptions import NoSuchWindowException
 
 # Create directories if they don't exist
 for directory in ["screenshots", "cookies", "profiles"]:
@@ -433,243 +436,136 @@ def save_cookies(sb, filename):
         print(f"Error saving cookies: {e}")
         return False
 
-def load_cookies(sb, filename):
-    """Loads cookies from file into browser"""
-    if os.path.exists(filename):
-        try:
-            with open(filename, 'r') as f:
-                data = json.load(f)
-            
-            # Handle both old and new cookie format
-            if isinstance(data, dict) and "cookies" in data:
-                # New format with metadata
-                cookies = data["cookies"]
-                metadata = data.get("metadata", {})
-                print(f"Loading cookies saved from {metadata.get('saved_from_domain', 'unknown domain')}")
-            else:
-                # Old format (just a list of cookies)
-                cookies = data
-            
-            # Add cookies to browser
-            current_url = sb.get_current_url()
-            current_domain = current_url.split('//')[1].split('/')[0]
-            
-            loaded_count = 0
-            for cookie in cookies:
-                try:
-                    # Handle expiry conversion
-                    if 'expiry' in cookie:
-                        cookie['expiry'] = int(cookie['expiry'])
-                    
-                    # Skip cookies with domain mismatch
-                    cookie_domain = cookie.get('domain', '')
-                    if cookie_domain and not current_domain.endswith(cookie_domain.lstrip('.')) and not cookie_domain.lstrip('.').endswith(current_domain):
-                        continue
-                    
-                    # Only add cookies for the current domain
-                    if 'domain' in cookie:
-                        # Make sure domain is compatible with current site
-                        if cookie['domain'].startswith('.'):
-                            # Some domains start with a dot
-                            if not current_domain.endswith(cookie['domain'][1:]):
-                                continue
-                        elif not current_domain.endswith(cookie['domain']):
-                            continue
-                    
-                    # Add the cookie
-                    try:
-                        sb.driver.add_cookie(cookie)
-                        loaded_count += 1
-                    except Exception as e:
-                        # Skip problematic cookies
-                        continue
-                except:
-                    continue
-            
-            print(f"Loaded {loaded_count} compatible cookies")
-            return loaded_count > 0
-        except Exception as e:
-            print(f"Error loading cookies: {e}")
-    return False
+def load_cookies(sb, cookies_file):
+    """
+    Load cookies from a file into the browser
+    
+    Args:
+        sb: SeleniumBase instance
+        cookies_file: Path to cookies file
+        
+    Returns:
+        float: Score associated with the cookies, or None if not found
+    """
+    if not os.path.exists(cookies_file):
+        print(f"Cookies file not found: {cookies_file}")
+        return None
+    
+    try:
+        with open(cookies_file, 'r') as f:
+            cookie_data = json.load(f)
+        
+        # Extract score from metadata if available
+        score = None
+        if "metadata" in cookie_data and "score" in cookie_data["metadata"]:
+            score = cookie_data["metadata"]["score"]
+            print(f"Loading cookies with score: {score}")
+        
+        # Clear cookies first
+        sb.delete_all_cookies()  # Clear existing cookies first
+        
+        # Add all cookies
+        for cookie in cookie_data["cookies"]:
+            try:
+                sb.add_cookie(cookie)
+            except Exception as e:
+                print(f"Error adding cookie: {e}")
+        
+        print(f"Successfully loaded {len(cookie_data['cookies'])} cookies from {cookies_file}")
+        return score
+    except Exception as e:
+        print(f"Error loading cookies: {e}")
+        return None
 
 def modify_browser_fingerprint(sb):
-    """
-    Modifies browser fingerprint to appear more like a normal user
-    This is a crucial function for improving reCAPTCHA scores
-    """
-    # Add more sophisticated fingerprint modifications
+    """Modifies the browser fingerprint to appear more human-like"""
     
-    # Set timezone and geolocation to consistent values
-    # Using common timezone offsets improves legitimacy
-    timezone_offset = random.choice([-480, -420, -360, -300, -240, -180, -120, -60, 0, 60, 120, 180, 240, 300, 360, 420, 480])
-    
-    # Randomize but make consistent
-    lat = random.uniform(25, 50)  # Northern hemisphere common locations
-    lng = random.uniform(-120, 30)  # Common longitudes covering North America and Europe
-    
-    # Map timezone offset to a realistic timezone string
-    timezone_map = {
-        -480: "America/Los_Angeles",
-        -420: "America/Denver",
-        -360: "America/Chicago",
-        -300: "America/New_York",
-        -240: "America/Halifax",
-        -180: "America/Sao_Paulo",
-        -120: "Atlantic/South_Georgia",
-        -60: "Atlantic/Cape_Verde",
-        0: "Europe/London",
-        60: "Europe/Berlin",
-        120: "Europe/Moscow",
-        180: "Europe/Moscow",
-        240: "Asia/Dubai",
-        300: "Asia/Karachi",
-        360: "Asia/Dhaka",
-        420: "Asia/Bangkok",
-        480: "Asia/Shanghai"
-    }
-    
-    timezone_string = timezone_map.get(timezone_offset, "America/New_York")
-    
-    js_timezone_script = f"""
-    Object.defineProperty(Intl, 'DateTimeFormat', {{
-        get: function() {{
-            return function() {{
-                return {{
-                    resolvedOptions: function() {{
-                        return {{
-                            timeZone: "{timezone_string}",
-                            locale: "en-US"
-                        }};
-                    }}
-                }};
-            }};
-        }}
-    }});
-    
-    // Consistent navigator properties
-    Object.defineProperty(navigator, 'languages', {{
-        get: function() {{
-            return ['en-US', 'en'];
-        }}
-    }});
-    
-    // Override geolocation API
-    const originalGeolocation = navigator.geolocation;
-    navigator.geolocation = {{
-        getCurrentPosition: function(success) {{
-            success({{
-                coords: {{
-                    accuracy: {random.uniform(5, 100)},
-                    altitude: null,
-                    altitudeAccuracy: null,
-                    heading: null,
-                    latitude: {lat},
-                    longitude: {lng},
-                    speed: null
-                }},
-                timestamp: Date.now()
-            }});
-        }},
-        watchPosition: originalGeolocation.watchPosition,
-        clearWatch: originalGeolocation.clearWatch
-    }};
-    """
-    
-    # Execute the timezone and geolocation modifications
-    sb.execute_script(js_timezone_script)
-    
-    # Add more human-like WebGL fingerprinting 
-    # This is a significant factor in bot detection
-    webgl_script = """
-    // Modify WebGL fingerprint without breaking functionality
-    const getParameter = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function(parameter) {
-        // Randomize certain parameters that are often used for fingerprinting
-        const UNMASKED_VENDOR_WEBGL = 0x9245;
-        const UNMASKED_RENDERER_WEBGL = 0x9246;
+    # JavaScript to set a realistic timezone
+    js_timezone_script = """
+        const timezone = 'America/New_York';
+        Object.defineProperty(Intl, 'DateTimeFormat', {
+            writable: true,
+            configurable: true,
+            value: new Proxy(Intl.DateTimeFormat, {
+                construct(target, args) {
+                    if (args.length > 0) {
+                        const options = args[1] || {};
+                        if (!options.timeZone) {
+                            options.timeZone = timezone;
+                            args[1] = options;
+                        }
+                    }
+                    return Reflect.construct(target, args);
+                }
+            })
+        });
         
-        if (parameter === UNMASKED_VENDOR_WEBGL) {
-            return "Google Inc. (Intel)";
-        }
-        
-        if (parameter === UNMASKED_RENDERER_WEBGL) {
-            return "ANGLE (Intel, Intel(R) UHD Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)";
-        }
-        
-        // Return original value for everything else
-        return getParameter.apply(this, arguments);
-    };
+        Object.defineProperty(Date.prototype, 'getTimezoneOffset', {
+            writable: true,
+            configurable: true,
+            value: function() {
+                // New York timezone offset is UTC-4 in summer (EDT) or UTC-5 in winter (EST)
+                // Returns the offset in minutes
+                // For EDT, this would be -240 (-4 hours * 60 minutes)
+                return -240;
+            }
+        });
     """
     
-    # Apply WebGL modifications
-    sb.execute_script(webgl_script)
+    # JavaScript to modify WebGL fingerprint
+    js_webgl_script = """
+        // Override WebGL to make it more common
+        const getParameter = WebGLRenderingContext.prototype.getParameter;
+        WebGLRenderingContext.prototype.getParameter = function(parameter) {
+            // Override common WebGL fingerprinting targets
+            if (parameter === 37445) { // UNMASKED_VENDOR_WEBGL
+                return 'Google Inc. (NVIDIA)';
+            }
+            if (parameter === 37446) { // UNMASKED_RENDERER_WEBGL
+                return 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)';
+            }
+            return getParameter.apply(this, arguments);
+        };
+    """
     
-    # Modify canvas fingerprint (another major detection factor)
-    canvas_script = """
-    // Override canvas fingerprinting
-    const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-    HTMLCanvasElement.prototype.toDataURL = function(type) {
-        if (this.width > 16 && this.height > 16) {
-            // Only modify fingerprinting canvases, not legitimate ones
-            const context = this.getContext('2d');
-            const imageData = context.getImageData(0, 0, this.width, this.height);
-            const data = imageData.data;
-            
-            // Make subtle modifications to the canvas data
-            // These won't be visible but will change the fingerprint hash
-            for (let i = 0; i < data.length; i += 4) {
-                // Only modify 1% of pixels
-                if (Math.random() < 0.01) {
-                    // Make a tiny adjustment to RGB values
-                    data[i] = Math.max(0, Math.min(255, data[i] + Math.floor(Math.random() * 3) - 1));
-                    data[i+1] = Math.max(0, Math.min(255, data[i+1] + Math.floor(Math.random() * 3) - 1));
-                    data[i+2] = Math.max(0, Math.min(255, data[i+2] + Math.floor(Math.random() * 3) - 1));
+    # JavaScript to modify Canvas fingerprint
+    js_canvas_script = """
+        // Override canvas methods to add subtle noise
+        const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+        HTMLCanvasElement.prototype.toDataURL = function(type) {
+            if (type === 'image/png' && this.width > 0 && this.height > 0) {
+                const context = this.getContext('2d');
+                if (context) {
+                    // Add subtle noise to the canvas
+                    const imageData = context.getImageData(0, 0, this.width, this.height);
+                    const data = imageData.data;
+                    for (let i = 0; i < data.length; i += 4) {
+                        // Add minor noise to color channels
+                        data[i] = Math.max(0, Math.min(255, data[i] + Math.floor(Math.random() * 2)));
+                        data[i+1] = Math.max(0, Math.min(255, data[i+1] + Math.floor(Math.random() * 2)));
+                        data[i+2] = Math.max(0, Math.min(255, data[i+2] + Math.floor(Math.random() * 2)));
+                    }
+                    context.putImageData(imageData, 0, 0);
                 }
             }
-            
-            context.putImageData(imageData, 0, 0);
-        }
-        return originalToDataURL.apply(this, arguments);
-    };
+            return originalToDataURL.apply(this, arguments);
+        };
     """
     
-    # Apply canvas modifications
-    sb.execute_script(canvas_script)
-    
-    # Simulate natural browser behavior by defining common browser properties
-    sb.execute_script("""
-    // Add common browser plugins
-    Object.defineProperty(navigator, 'plugins', {
-        get: function() {
-            // Return a realistic plugin array
-            const plugins = [
-                { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
-                { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: 'Portable Document Format' },
-                { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
-            ];
-            
-            // Create a plugin-like array object
-            const pluginArray = [];
-            for (let i = 0; i < plugins.length; i++) {
-                pluginArray[i] = plugins[i];
-            }
-            pluginArray.length = plugins.length;
-            
-            // Add required properties to make it seem like a PluginArray
-            pluginArray.item = function(index) { return this[index]; };
-            pluginArray.namedItem = function(name) {
-                for (let i = 0; i < this.length; i++) {
-                    if (this[i].name === name) return this[i];
-                }
-                return null;
-            };
-            
-            return pluginArray;
-        }
-    });
-    """)
-    
-    print("Browser fingerprint modified")
+    try:
+        print("Modifying timezone...")
+        sb.execute_script(js_timezone_script)
+        
+        print("Modifying WebGL fingerprint...")
+        sb.execute_script(js_webgl_script)
+        
+        print("Modifying canvas fingerprint...")
+        sb.execute_script(js_canvas_script)
+        
+        print("Browser fingerprint modifications applied")
+    except Exception as e:
+        print(f"Error modifying browser fingerprint: {e}")
+        traceback.print_exc()
 
 def visit_google_and_search(sb):
     """Visit Google and perform a search to establish browsing history"""
@@ -1422,6 +1318,7 @@ def run_score_detector(profile_name=None, build_history=True, headless=False):
     else:
         profile_dir = None
     
+    sb = None
     try:
         # Start a SeleniumBase browser
         sb = init_browser(profile_dir=profile_dir, headless=headless)
@@ -1491,21 +1388,24 @@ def run_score_detector(profile_name=None, build_history=True, headless=False):
     finally:
         # Always take a screenshot at the end
         try:
-            sb.save_screenshot(f"screenshots/final_{run_id}.png", folder="")
-        except:
-            pass
+            if sb:
+                sb.save_screenshot(f"screenshots/final_{run_id}.png", folder="")
+        except Exception as e:
+            print(f"Error taking screenshot: {e}")
         
-        # Close the browser
+        # Close the browser properly
         try:
-            sb.driver.quit()
-        except:
+            if sb:
+                sb.quit()  # Using quit() directly on the Driver object
+        except Exception as e:
+            print(f"Error closing browser: {e}")
             pass
 
 def save_browser_cookies(sb):
     """Saves all browser cookies to a file"""
     try:
         cookies_file = "cookies/browser_cookies.json"
-        cookies = sb.driver.get_cookies()
+        cookies = sb.get_cookies()
         
         # Organize cookies by domain for easier debugging
         current_url = sb.get_current_url()
@@ -1535,7 +1435,7 @@ def save_high_score_cookies(sb, score, run_id):
     """Saves cookies when a high score is achieved"""
     try:
         cookies_file = f"cookies/high_score_cookies_{score}_{run_id}.json"
-        cookies = sb.driver.get_cookies()
+        cookies = sb.get_cookies()
         
         # Organize cookies by domain
         current_url = sb.get_current_url()
@@ -1689,7 +1589,7 @@ def load_best_cookies():
             
         # Find the file with the highest score
         best_file = None
-        best_score = 0
+        best_score = 0.0
         
         for file in cookie_files:
             try:
@@ -1802,6 +1702,82 @@ def natural_scrolling(sb, scroll_amount=None, direction="down", scroll_count=Non
         window.scrollBy(0, {-scroll_back_amount});
         """)
         human_like_delay(0.5, 1.0)
+
+def init_browser(profile_dir=None, headless=False):
+    """
+    Initialize and return a SeleniumBase browser instance
+    
+    Args:
+        profile_dir (str): Path to browser profile directory (or None)
+        headless (bool): Whether to run in headless mode
+        
+    Returns:
+        sb: SeleniumBase instance
+    """
+    from seleniumbase import Driver
+    from seleniumbase.common.exceptions import NoSuchWindowException
+    
+    # Configure options
+    kwargs = {
+        "uc": True,
+        "headless": headless,
+    }
+    
+    if profile_dir:
+        kwargs["user_data_dir"] = profile_dir
+    
+    # Create a browser directly using Driver instead of SB context manager
+    browser = Driver(**kwargs)
+    
+    try:
+        # Set user agent if not using a profile
+        if not profile_dir:
+            random_user_agent = random.choice(USER_AGENTS)
+            browser.execute_cdp_cmd('Network.setUserAgentOverride', {
+                "userAgent": random_user_agent
+            })
+            print(f"Using user agent: {random_user_agent}")
+    except Exception as e:
+        print(f"Error setting user agent: {e}")
+    
+    return browser
+
+def find_best_cookies(profile_dir):
+    """
+    Find the cookie file with the highest score in the specified profile directory
+    
+    Args:
+        profile_dir (str): Path to the profile directory
+        
+    Returns:
+        str: Path to the best cookie file, or None if no files found
+    """
+    if not profile_dir or not os.path.exists(profile_dir):
+        return None
+        
+    # Look for cookie files in the cookies directory
+    cookie_files = glob.glob(os.path.join("cookies", "high_score_cookies_*.json"))
+    
+    if not cookie_files:
+        return None
+    
+    # Extract scores from filenames
+    best_file = None
+    best_score = 0.0
+    
+    for file_path in cookie_files:
+        # Extract score from filename (format: high_score_cookies_X.Y_ZZZZZZZZ.json)
+        match = re.search(r"high_score_cookies_(\d+\.\d+)_", os.path.basename(file_path))
+        if match:
+            try:
+                score = float(match.group(1))
+                if score > best_score:
+                    best_score = score
+                    best_file = file_path
+            except:
+                continue
+    
+    return best_file
 
 def main():
     """Main function to run the reCAPTCHA score detector"""
