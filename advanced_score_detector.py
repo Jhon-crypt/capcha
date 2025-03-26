@@ -22,9 +22,23 @@ for directory in ["screenshots", "cookies", "profiles"]:
 
 # Constants
 USER_AGENTS = [
+    # macOS user agents
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:123.0) Gecko/20100101 Firefox/123.0"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:123.0) Gecko/20100101 Firefox/123.0",
+    
+    # Linux user agents
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
+    
+    # Windows user agents
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36"
 ]
 
 # Common search queries for establishing history
@@ -1378,7 +1392,8 @@ def run_score_detector(profile_name=None, build_history=True, headless=False):
             return score
         except Exception as e:
             print(f"Could not find score element: {e}")
-            return None
+        
+        return None
     
     except Exception as e:
         print(f"Error: {e}")
@@ -1732,7 +1747,8 @@ def init_browser(profile_dir=None, headless=False):
     try:
         # Set user agent if not using a profile
         if not profile_dir:
-            random_user_agent = random.choice(USER_AGENTS)
+            # Use the platform-appropriate user agent function
+            random_user_agent = get_platform_appropriate_user_agent()
             browser.execute_cdp_cmd('Network.setUserAgentOverride', {
                 "userAgent": random_user_agent
             })
@@ -1778,6 +1794,32 @@ def find_best_cookies(profile_dir):
                 continue
     
     return best_file
+
+def get_platform_appropriate_user_agent():
+    """
+    Returns a user agent appropriate for the current platform.
+    This helps ensure the user agent matches the operating system.
+    """
+    system = platform.system()
+    
+    if system == "Linux":
+        # Filter for Linux user agents
+        linux_agents = [ua for ua in USER_AGENTS if "X11; Linux" in ua or "X11; Ubuntu" in ua or "X11; Fedora" in ua]
+        if linux_agents:
+            return random.choice(linux_agents)
+    elif system == "Darwin":  # macOS
+        # Filter for macOS user agents
+        mac_agents = [ua for ua in USER_AGENTS if "Macintosh; Intel Mac OS X" in ua]
+        if mac_agents:
+            return random.choice(mac_agents)
+    elif system == "Windows":
+        # Filter for Windows user agents if we add them later
+        windows_agents = [ua for ua in USER_AGENTS if "Windows NT" in ua]
+        if windows_agents:
+            return random.choice(windows_agents)
+            
+    # If no platform-specific agents found or unknown platform, use any agent
+    return random.choice(USER_AGENTS)
 
 def main():
     """Main function to run the reCAPTCHA score detector"""

@@ -10,6 +10,7 @@ This tool helps you achieve high reCAPTCHA v3 scores (0.8-0.9) by simulating hum
 - Saves and reuses successful cookie profiles
 - Supports multiple runs with configurable options
 - Takes screenshots for debugging and verification
+- Cross-platform support for Linux, macOS, and Windows with appropriate user agents
 
 ## Prerequisites
 
@@ -156,6 +157,7 @@ For convenience, two shell scripts are provided:
    - Don't use headless mode for best results
    - Allow cookies and JavaScript
    - Use a modern Chrome version
+   - The script automatically uses platform-appropriate user agents (Linux, macOS, or Windows)
 
 ## Directory Structure
 
